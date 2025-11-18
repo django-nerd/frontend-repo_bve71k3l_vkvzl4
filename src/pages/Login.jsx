@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+// Frontend-only auth: we keep a simple user record in localStorage
+// cc_users: { email: { name, email, password }, ... }
+// On login/register we set cc_token and basic profile, then route to /chat
 
 export default function Login() {
   const [mode, setMode] = useState('login') // 'login' | 'register'
@@ -15,24 +17,25 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const endpoint = mode === 'login' ? '/auth/login' : '/auth/register'
-      const body = mode === 'login' ? { email, password } : { name, email, password }
+      const users = JSON.parse(localStorage.getItem('cc_users') || '{}')
 
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || 'Request failed')
+      if (mode === 'register') {
+        if (users[email]) throw new Error('Account already exists')
+        users[email] = { name: name || email.split('@')[0], email, password }
+        localStorage.setItem('cc_users', JSON.stringify(users))
+        localStorage.setItem('cc_token', crypto.randomUUID())
+        localStorage.setItem('cc_name', users[email].name)
+        localStorage.setItem('cc_email', email)
+        window.location.href = '/chat'
+        return
       }
 
-      const data = await res.json()
-      localStorage.setItem('cc_token', data.token)
-      localStorage.setItem('cc_name', data.name)
-      localStorage.setItem('cc_email', data.email)
+      // login
+      const user = users[email]
+      if (!user || user.password !== password) throw new Error('Invalid email or password')
+      localStorage.setItem('cc_token', crypto.randomUUID())
+      localStorage.setItem('cc_name', user.name)
+      localStorage.setItem('cc_email', user.email)
       window.location.href = '/chat'
     } catch (err) {
       setError(err.message)

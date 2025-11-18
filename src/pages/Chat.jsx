@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef } from 'react'
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+// Frontend-only mode: store messages in localStorage per-user token
+// We keep login token from localStorage and gate access without backend calls
 
 export default function Chat() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [error, setError] = useState('')
   const listRef = useRef(null)
 
   const token = localStorage.getItem('cc_token')
@@ -16,9 +16,8 @@ export default function Chat() {
       window.location.href = '/login'
       return
     }
-    fetchMessages()
-    const interval = setInterval(fetchMessages, 2000)
-    return () => clearInterval(interval)
+    const saved = JSON.parse(localStorage.getItem('cc_chat') || '[]')
+    setMessages(saved)
   }, [])
 
   useEffect(() => {
@@ -27,38 +26,23 @@ export default function Chat() {
     }
   }, [messages])
 
-  const fetchMessages = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/chat`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('Failed to load messages')
-      const data = await res.json()
-      setMessages(data)
-    } catch (e) {
-      setError(e.message)
-    }
+  const persist = (items) => {
+    localStorage.setItem('cc_chat', JSON.stringify(items))
   }
 
-  const sendMessage = async (e) => {
+  const sendMessage = (e) => {
     e.preventDefault()
     if (!input.trim()) return
-    try {
-      setError('')
-      const res = await fetch(`${API_BASE}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content: input.trim() }),
-      })
-      if (!res.ok) throw new Error('Failed to send message')
-      setInput('')
-      await fetchMessages()
-    } catch (e) {
-      setError(e.message)
+    const newMsg = {
+      id: crypto.randomUUID(),
+      user_name: name || 'Anonymous',
+      content: input.trim(),
+      ts: Date.now(),
     }
+    const next = [...messages, newMsg]
+    setMessages(next)
+    persist(next)
+    setInput('')
   }
 
   const logout = () => {
@@ -104,8 +88,6 @@ export default function Chat() {
           />
           <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold">Send</button>
         </form>
-
-        {error && <div className="mt-3 text-red-400 text-sm">{error}</div>}
       </main>
     </div>
   )
